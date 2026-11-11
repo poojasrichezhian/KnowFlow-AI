@@ -1,0 +1,166 @@
+{
+ "repo": "DEMO_OWNER/payments-service-demo",
+ "branch": "main",
+ "description": "Sample payments service used by the KnowFlow AI demo",
+ "tree": [
+  "README.md",
+  "auth/__init__.py",
+  "auth/tokens.py",
+  "db/__init__.py",
+  "db/migrations.py",
+  "db/schema.sql",
+  "docs/architecture.md",
+  "notifications/__init__.py",
+  "notifications/queue.py",
+  "payments/__init__.py",
+  "payments/api.py",
+  "payments/gateway.py",
+  "payments/retry.py",
+  "requirements.txt",
+  "tests/test_api.py",
+  "webhooks/__init__.py",
+  "webhooks/handler.py"
+ ],
+ "modules": [
+  "auth/",
+  "db/",
+  "notifications/",
+  "payments/",
+  "webhooks/"
+ ],
+ "files": {
+  "README.md": "# Payments Service\n\nHandles checkout payments, gateway webhooks and customer notifications.\n\n## Modules\n\n- `payments/` - payment API and gateway client\n- `webhooks/` - gateway webhook receiver\n- `auth/` - service token validation\n- `notifications/` - customer notification queue\n- `db/` - schema and migrations\n\n## Retries\n\nFailed gateway calls are retried asynchronously by the retry worker in\n`workers/retry_worker.py`, so checkout requests are never blocked.\n\n## Configuration\n\n| Variable | Purpose |\n| --- | --- |\n| `DATABASE_URL` | PostgreSQL connection string |\n| `PAYMENT_GATEWAY_KEY` | API key for the payment gateway |\n\n## Running\n\n    pip install -r requirements.txt\n    python -m payments.api\n",
+  "docs/architecture.md": "# Architecture notes\n\nThe Payment API validates every request with the Auth Service before calling the gateway.\nWebhook events from the gateway are stored and then pushed to the notification queue.\n\nMeera maintains the webhooks module.\n\nThe notification queue is an in-process queue for now.\n",
+  "auth/tokens.py": "\"\"\"Service-to-service token validation.\"\"\"\nimport os\n\nAUTH_PUBLIC_KEY = os.environ.get(\"AUTH_PUBLIC_KEY\", \"\")\n\n\ndef validate_token(token):\n    if not token:\n        raise PermissionError(\"missing token\")\n    return True\n",
+  "db/schema.sql": "CREATE TABLE payments (\n    id SERIAL PRIMARY KEY,\n    order_id TEXT NOT NULL,\n    amount_paise INTEGER NOT NULL,\n    status TEXT NOT NULL,\n    created_at TIMESTAMP DEFAULT now()\n);\n\nCREATE TABLE webhook_events (\n    id SERIAL PRIMARY KEY,\n    body BYTEA NOT NULL,\n    received_at TIMESTAMP DEFAULT now()\n);\n\nCREATE TABLE refunds (\n    id SERIAL PRIMARY KEY,\n    payment_id INTEGER REFERENCES payments(id),\n    amount_paise INTEGER NOT NULL\n);\n",
+  "db/migrations.py": "\"\"\"Database helpers and migrations.\"\"\"\n\n\ndef save_event(body):\n    return True\n\n\ndef migrate_refunds_table():\n    # TODO: refunds table migration is half done - backfill of old refunds not written yet\n    raise NotImplementedError(\"refunds backfill pending\")\n",
+  "notifications/queue.py": "\"\"\"In-process notification queue. Events are lost on restart.\"\"\"\nfrom collections import deque\n\n_queue = deque()\n\n\ndef enqueue(event, payload):\n    _queue.append((event, payload))\n\n\ndef drain():\n    while _queue:\n        yield _queue.popleft()\n",
+  "payments/api.py": "\"\"\"Payment API: creates charges for checkout.\"\"\"\nimport os\n\nfrom auth.tokens import validate_token\nfrom payments.gateway import charge\nfrom payments.retry import with_retry\nfrom notifications.queue import enqueue\n\nDATABASE_URL = os.environ[\"DATABASE_URL\"]\n\n\ndef create_payment(token, order_id, amount_paise):\n    \"\"\"Validate the caller, charge the gateway with retries, then notify the customer.\"\"\"\n    validate_token(token)\n    result = with_retry(lambda: charge(order_id, amount_paise))\n    enqueue(\"payment_succeeded\", {\"order_id\": order_id})\n    return result\n\n\nif __name__ == \"__main__\":\n    print(\"payments service ready\")\n",
+  "payments/retry.py": "\"\"\"Retry helper for gateway calls.\n\nRetries run synchronously inside the request and block the checkout call until they finish.\n\"\"\"\nimport os\nimport time\n\nMAX_ATTEMPTS = int(os.environ.get(\"RETRY_MAX_ATTEMPTS\", \"3\"))\n\n\ndef with_retry(fn):\n    last = None\n    for attempt in range(MAX_ATTEMPTS):\n        try:\n            return fn()\n        except Exception as exc:  # noqa: BLE001\n            last = exc\n            # HACK: sleep is capped at 4s because the load balancer drops requests after 10s\n            time.sleep(min(2 ** attempt, 4))\n    raise last\n",
+  "payments/gateway.py": "\"\"\"Thin client for the payment gateway.\"\"\"\nimport os\n\nGATEWAY_KEY = os.environ[\"PAYMENT_GATEWAY_KEY\"]\nRATE_LIMIT_PER_SECOND = 40\n\n\nclass GatewayError(Exception):\n    pass\n\n\ndef charge(order_id, amount_paise):\n    # FIXME: gateway returns HTTP 200 with an error body for declined cards; we only check the status code\n    return {\"order_id\": order_id, \"amount\": amount_paise, \"status\": \"captured\"}\n",
+  "webhooks/handler.py": "\"\"\"Receives webhook events from the payment gateway.\"\"\"\nimport hashlib\nimport hmac\nimport os\n\nfrom db.migrations import save_event\nfrom notifications.queue import enqueue\n\nWEBHOOK_SECRET = os.environ[\"WEBHOOK_SECRET\"]\n\n\ndef verify_signature(body, signature):\n    expected = hmac.new(WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()\n    return hmac.compare_digest(expected, signature)\n\n\ndef handle_event(body, signature):\n    if not verify_signature(body, signature):\n        raise PermissionError(\"invalid webhook signature\")\n    # TODO: reject events older than 5 minutes to stop replay attacks\n    save_event(body)\n    enqueue(\"webhook_received\", {\"size\": len(body)})\n    return {\"received\": True}\n",
+  "tests/test_api.py": "from payments.retry import with_retry\n\n\ndef test_with_retry_returns_value():\n    assert with_retry(lambda: 1) == 1\n"
+ },
+ "module_commits": {
+  "auth/": [
+   {
+    "sha": "30888a734b7844c08ca2d07ae5488c1e58c7a413",
+    "author": "Meera Nair",
+    "date": "2026-03-05",
+    "message": "Add service token validation",
+    "url": "https://github.com/DEMO_OWNER/payments-service-demo/commit/30888a734b7844c08ca2d07ae5488c1e58c7a413"
+   }
+  ],
+  "db/": [
+   {
+    "sha": "8bcdb361ffa9935c17736576e5b67c7112ed97aa",
+    "author": "Arjun Sharma",
+    "date": "2026-09-09",
+    "message": "Start refunds table migration",
+    "url": "https://github.com/DEMO_OWNER/payments-service-demo/commit/8bcdb361ffa9935c17736576e5b67c7112ed97aa"
+   },
+   {
+    "sha": "8ed3eb6dbbc93610075e6ef7b30daa2ab71beb10",
+    "author": "Arjun Sharma",
+    "date": "2026-03-12",
+    "message": "Add database schema for payments and webhook events",
+    "url": "https://github.com/DEMO_OWNER/payments-service-demo/commit/8ed3eb6dbbc93610075e6ef7b30daa2ab71beb10"
+   }
+  ],
+  "notifications/": [
+   {
+    "sha": "130dd8082949647cbdf1280f5b8c14462946bb02",
+    "author": "Rohan Iyer",
+    "date": "2026-08-04",
+    "message": "Notification queue: note that events are lost on restart",
+    "url": "https://github.com/DEMO_OWNER/payments-service-demo/commit/130dd8082949647cbdf1280f5b8c14462946bb02"
+   },
+   {
+    "sha": "17dd9a97376dbe1f92902d73b5e01a119bab2422",
+    "author": "Rohan Iyer",
+    "date": "2026-04-22",
+    "message": "Add in-process notification queue",
+    "url": "https://github.com/DEMO_OWNER/payments-service-demo/commit/17dd9a97376dbe1f92902d73b5e01a119bab2422"
+   }
+  ],
+  "payments/": [
+   {
+    "sha": "6662311e15e2e35d1372a5e6b4dd936ac065972c",
+    "author": "Arjun Sharma",
+    "date": "2026-07-15",
+    "message": "Make retry attempts configurable and cap backoff",
+    "url": "https://github.com/DEMO_OWNER/payments-service-demo/commit/6662311e15e2e35d1372a5e6b4dd936ac065972c"
+   },
+   {
+    "sha": "60747c76284dc8f8979b4060ea1270e988fb9bc5",
+    "author": "Arjun Sharma",
+    "date": "2026-06-24",
+    "message": "Lower gateway rate limit to 40 requests per second",
+    "url": "https://github.com/DEMO_OWNER/payments-service-demo/commit/60747c76284dc8f8979b4060ea1270e988fb9bc5"
+   },
+   {
+    "sha": "12f023090b57fd4523b61fa289637ceec5b1e70c",
+    "author": "Arjun Sharma",
+    "date": "2026-05-06",
+    "message": "Use retry helper in payment API and notify on success",
+    "url": "https://github.com/DEMO_OWNER/payments-service-demo/commit/12f023090b57fd4523b61fa289637ceec5b1e70c"
+   },
+   {
+    "sha": "134ad7896117fbc75c746516bd68801405e087bd",
+    "author": "Arjun Sharma",
+    "date": "2026-04-08",
+    "message": "Add retry helper for gateway calls",
+    "url": "https://github.com/DEMO_OWNER/payments-service-demo/commit/134ad7896117fbc75c746516bd68801405e087bd"
+   },
+   {
+    "sha": "98be135a703b55b05fb2754c3f97056b091ea086",
+    "author": "Arjun Sharma",
+    "date": "2026-03-02",
+    "message": "Initial payment API and gateway client",
+    "url": "https://github.com/DEMO_OWNER/payments-service-demo/commit/98be135a703b55b05fb2754c3f97056b091ea086"
+   }
+  ],
+  "webhooks/": [
+   {
+    "sha": "b64fd3171d79cbdfcf2219a0b0b2581a970aa396",
+    "author": "Arjun Sharma",
+    "date": "2026-10-01",
+    "message": "Webhook handler: tighten signature error message",
+    "url": "https://github.com/DEMO_OWNER/payments-service-demo/commit/b64fd3171d79cbdfcf2219a0b0b2581a970aa396"
+   },
+   {
+    "sha": "558a4ee8f34ee97f9e7993e9e73fe87e8eb91236",
+    "author": "Arjun Sharma",
+    "date": "2026-05-19",
+    "message": "Store webhook events and push them to notifications",
+    "url": "https://github.com/DEMO_OWNER/payments-service-demo/commit/558a4ee8f34ee97f9e7993e9e73fe87e8eb91236"
+   },
+   {
+    "sha": "5274bdebd3e73b9a450471c60688fc8081f8c40a",
+    "author": "Arjun Sharma",
+    "date": "2026-03-20",
+    "message": "Add webhook receiver with signature check",
+    "url": "https://github.com/DEMO_OWNER/payments-service-demo/commit/5274bdebd3e73b9a450471c60688fc8081f8c40a"
+   }
+  ]
+ },
+ "readme": "README.md",
+ "readme_commits": [
+  {
+   "sha": "20b2fcb64eceed74e91cfeb98c6e66fa37050eaf",
+   "author": "Arjun Sharma",
+   "date": "2026-04-10",
+   "message": "README: describe retries and the planned retry worker",
+   "url": "https://github.com/DEMO_OWNER/payments-service-demo/commit/20b2fcb64eceed74e91cfeb98c6e66fa37050eaf"
+  },
+  {
+   "sha": "98be135a703b55b05fb2754c3f97056b091ea086",
+   "author": "Arjun Sharma",
+   "date": "2026-03-02",
+   "message": "Initial payment API and gateway client",
+   "url": "https://github.com/DEMO_OWNER/payments-service-demo/commit/98be135a703b55b05fb2754c3f97056b091ea086"
+  }
+ ],
+ "issues": [],
+ "fetched_at": "bundled snapshot"
+}

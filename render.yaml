@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: knowflow-ai
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: DEMO_REPO
+        sync: false
+      - key: DATABASE_URL
+        sync: false
