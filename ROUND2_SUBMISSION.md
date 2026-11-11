@@ -1,138 +1,465 @@
-# Round 2 form: draft answers
+# KnowFlow AI – Round 2: The Build
 
-Fill the bracketed parts, and delete any line that is not true of YOUR deployed link when you submit.
+## 1. Project Information
 
-## Your team
+**Project Name:** KnowFlow AI  
+**Hackathon:** CodersInPune  
+**Team Name:** Code Gods
 
-- Hackathon name: [the form lists CodeTitan India 2026, CodersInPune, CodePuneThinkers, CodeFrontier. Your Round 1 deck says "HackWithPune 2026". Confirm with the organisers which option is yours before submitting.]
-- Team name: [exactly as in Round 1]
-- Team leader, email: [same email as Round 1]
-- Members: Poojasri I S / Aadarshini S S / Surya Prakash M
+### Team Members
 
-## Links
+1. Poojasri I S
+2. Aadarshini S S
+3. Surya Prakash M
 
-- Functioning project: [deployed URL]
-- Source code: [public GitHub URL]
-- Updated PDF: [Drive link, Anyone with the link, Viewer]
+### Team Leader
 
-## The list of features you completed
+Poojasri I S
 
-```
-One-click demo sign-in for three roles (project manager, developer, new team member), no account needed
-Account sign-up and sign-in with JWT sessions and hashed passwords
-Create a project from any public GitHub repository URL
-GitHub reader: commit history per module, code comments, imports, documents, open issues and pull requests
-Upload PDF, DOCX, Markdown and text documents; paste meeting notes; import a task list from CSV
-Claim extraction for ownership, decisions, risks, tasks, architecture, configuration and documentation
-Every claim labelled Verified, Uncertain, Conflicting or Missing, with the reason for the label shown
-Evidence viewer: each claim lists the exact quoted passage, file and line or commit, with a link to GitHub
-Conflict detection: named owner vs commit history
-Conflict detection: marked done in notes vs still open in the task list or code
-Conflict detection: opposite statements about the same thing (asynchronous vs synchronous, enabled vs disabled)
-Conflict detection: documents that refer to files which do not exist in the repository
-Missing-knowledge detection: undocumented environment variables, modules without tests, tasks without an owner, decisions with no recorded reason
-Module ownership and single-owner risk calculated from commits
-Module dependencies read from import statements (Python, JavaScript, TypeScript)
-Departure simulator: pick a person and see the modules and open work only they know
-Exit interview: one generated question per gap, conflict or risk tied to that person; answers are stored as evidence and re-verified
-Handover readiness score with a breakdown by state
-Human review: approve, reject, edit wording, reopen; bulk-approve verified claims
-Conflicts cannot be approved until a reviewer resolves them with a written reason
-Publish handover versions with version history
-Role-based handover reports for project manager, developer and new team member
-Download any handover as Markdown
-Role-based access control with project membership checks on every request
-Managers-only sources: claims that rely on them are hidden from other roles
-Team management: add or remove members and set roles
-Bundled demo project with a reset button
-```
+---
 
-Only if you set LLM_API_KEY on the server and tested it yourself, add:
-`Optional LLM extraction from documents with a quote lock (output not found word for word in the source is discarded)`
+## 2. Project Overview
 
-## Technology and implementation details
+KnowFlow AI is an AI-assisted project knowledge handover and verification platform designed to prevent critical technical knowledge from being lost when employees leave an organisation or move to another team.
 
-Frontend: React 18 built with Vite, plain CSS, no UI library. Backend: Python, FastAPI, Pydantic, SQLAlchemy.
-Database: SQLite by default, PostgreSQL through DATABASE_URL [say which one your deployment uses]. Auth: JWT (PyJWT),
-PBKDF2 password hashing, role checks on every project route. Documents: PyMuPDF for PDF, python-docx for DOCX.
-Integration: GitHub REST API (repository, tree, commits per path, issues) plus raw file contents.
-Deployment: one Docker image; FastAPI serves the built React app, so there is a single URL. [hosting provider]
+In software development teams, important information about architecture, code ownership, configurations, decisions, dependencies and unresolved tasks is often scattered across repositories and documents.
 
-How it fits together: sources are stored as text or as a repository snapshot. The verifier (backend/app/engine.py) is a
-pure function that turns all sources of a project into claims. It runs in four passes: (1) split every source into
-passages with a file-and-line or commit locator; (2) derive facts straight from the repository; (3) take each statement
-people wrote and search all other sources for passages about the same thing, using a TF-IDF index we wrote; (4) apply
-exit-interview answers. A statement becomes Verified only when an independent source backs it, Conflicting when one
-disagrees, Uncertain when nothing else mentions it. Review decisions are stored per claim fingerprint so they survive
-re-analysis, and are dropped automatically if the underlying evidence changes the claim's state.
+When an experienced developer leaves, the remaining team may struggle to understand the system, identify responsibilities and continue development efficiently.
 
-What was technically hard:
-- Making the state of a claim reproducible. No language model decides a state; identical sources always give identical
-  output (covered by a test).
-- Evidence that cannot be invented. Every quoted excerpt is taken from the stored source, and a test asserts that each
-  one is found verbatim in its source.
-- Keeping human review stable across re-analysis without letting a stale approval hide a new conflict.
-- Source-level permissions that also apply to derived claims and to already published versions.
-- Running on a 512 MB free host: no model download, analysis of the demo project takes well under a second.
-- 17 automated tests cover the verifier, the four conflict checks, the exit-interview rule and the GitHub reader.
+KnowFlow AI addresses this problem by organising project knowledge into verifiable claims, presenting supporting evidence and helping project managers review missing or conflicting information.
 
-## What changed from your original proposal, and why?
+The platform aims to make knowledge handover more structured, transparent and reliable.
 
-Added
-- Departure simulator and exit interview. Round 1 only reconstructed knowledge after someone left. We realised the
-  cheapest moment to capture it is before they go, so the product now turns every gap into a question for that person.
-- Handover readiness score, so a manager can see whether a handover is safe to publish.
-- Facts derived directly from the repository (ownership from commits, imports, TODO notes, undocumented configuration,
-  broken file references). These need no AI and are the strongest evidence we have.
+---
 
-Replaced
-- LLM-first extraction became a rule-based verifier with an optional LLM step. Our core promise is "no claim without
-  proof"; letting a model assign Verified would break it. The LLM may only propose sentences, and a quote lock discards
-  anything not present word for word in the document.
-- ChromaDB and Sentence Transformers became an in-process TF-IDF index. The embedding model did not fit the memory of
-  free hosting, and a judge must be able to open the link. Semantic retrieval is our first Round 3 improvement.
-- LangChain was dropped: one HTTP call did not justify the dependency.
-- PostgreSQL is supported but SQLite is the default, to keep the deployment to one service.
+## 3. Live Product and Source Code
 
-Not built
-- Direct Jira and Google Drive connections (never in the MVP). Task lists come in as CSV exports and documents as uploads.
-- The visual dependency graph. Dependencies are detected and listed as claims, not drawn.
+**Live Application:**
 
-## What does NOT work yet?
+https://knowflow-ai-btyv.onrender.com
 
-- Evidence matching is word-based. If two sources say the same thing in different words, the claim stays Uncertain
-  instead of Verified, and a paraphrased contradiction is not caught.
-- Word matching can also over-match: a statement that shares several terms with another source can be marked
-  Verified even though one detail differs. This is one reason nothing is published without human approval.
-- Only the four conflict types listed above are detected. Numbers that disagree (for example two different limits) are not.
-- Statement extraction is pattern-based and English only. Vague sentences are skipped; a sentence with two facts becomes one claim.
-- Private repositories are not supported. For large repositories we read up to 8 modules, 45 code files, the last 100
-  commits per module and 30 open issues.
-- Import analysis covers Python and JavaScript/TypeScript. Other languages get ownership and TODO claims but no dependencies.
-- Scanned PDFs (images without text) cannot be read.
-- No email invitations: a person must sign up before a manager can add them to a project.
-- The demo project is shared by everyone who opens it, so another visitor's reviews may be visible. "Reset demo"
-  (as project manager) restores it.
-- [If on a free host] The first load after idle can take up to a minute.
-- [If using SQLite] Accounts and projects other than the demo are lost when the server restarts.
-- [If DEMO_REPO is not set] Demo evidence shows file, line and quote but no GitHub link. Projects created from a real repository do link.
-- [Unless you enabled and tested it] The LLM step is switched off on the live site.
+**GitHub Repository:**
 
-## Three improvements for Round 3
+https://github.com/poojasrichezhian/KnowFlow-AI
 
-**1. Semantic verification with a measured accuracy.**
-Add an embedding index and an LLM entailment check (supports / contradicts / unrelated) behind the existing quote lock,
-so the verifier catches agreement and contradiction that use different words, including notes versus what the code
-actually does. We will publish precision and recall on a labelled set of seeded contradictions inside the product.
-For the user: fewer claims stuck at Uncertain, and conflicts found that today need a human to notice.
+**Deployment Platform:** Render
 
-**2. Continuous handover with drift alerts.**
-Re-read connected repositories on a schedule and by GitHub webhook. When new commits or documents change the evidence
-under an approved claim, mark it Stale, show what changed since the published version, and list it in an alerts feed
-for the reviewer. For the user: a handover that stays true after it is published, instead of a snapshot that ages.
+**Application Type:** Full-stack web application
 
-**3. Ask the handover.**
-A question box over the published handover that answers only from approved claims, cites the evidence for every
-sentence, and says "not in the handover" otherwise. Unanswered questions are logged as new Missing items and feed the
-next exit interview. For the user: a newcomer gets answers in seconds, and every question nobody could answer becomes
-a tracked knowledge gap.
+---
+
+## 4. Problem Statement
+
+Software teams depend on the knowledge and experience of individual developers.
+
+When an important developer leaves a project, several problems can occur:
+
+- Critical technical knowledge may disappear.
+- Project documentation may be incomplete or outdated.
+- Code ownership and responsibilities may be unclear.
+- Important architectural decisions may not be recorded.
+- Conflicting information may exist across different sources.
+- Remaining developers may waste time understanding unfamiliar systems.
+- Project continuity and productivity may be affected.
+
+Traditional handover processes depend heavily on manually written documents and personal explanations.
+
+There is a need for a structured platform that can organise project knowledge, identify information gaps, provide supporting evidence and help teams verify handover readiness.
+
+---
+
+## 5. Our Solution
+
+KnowFlow AI provides a centralised knowledge handover workspace.
+
+It organises project information into individual knowledge claims and classifies them into four categories:
+
+1. **Verified:** Information supported by available evidence.
+2. **Uncertain:** Information that requires additional confirmation.
+3. **Conflicting:** Information that contains inconsistencies requiring review.
+4. **Missing:** Important information that has not been adequately documented.
+
+Project managers can inspect supporting evidence, review claims, resolve conflicts and track the project's knowledge readiness.
+
+The goal is to help teams understand what is known, what is uncertain, what is conflicting and what still needs attention before a developer leaves.
+
+---
+
+## 6. Features Implemented
+
+The current implementation focuses on the following core capabilities:
+
+### 6.1 Project Handover Dashboard
+
+- Centralised project handover dashboard.
+- Project knowledge overview.
+- Knowledge claim statistics.
+- Review progress tracking.
+- Project readiness percentage.
+
+### 6.2 Knowledge Claim Classification
+
+- Classification of knowledge claims into Verified, Uncertain, Conflicting and Missing.
+- Structured presentation of project knowledge.
+- Identification of claims that require human review.
+
+### 6.3 Evidence Review
+
+- Evidence viewer for examining supporting information.
+- Display of available documentation references.
+- Presentation of supporting code or repository references where available.
+- Evidence-based claim review.
+
+### 6.4 Human Review and Conflict Resolution
+
+- Review of conflicting knowledge claims.
+- Ability to record explanations during conflict resolution.
+- Claim approval workflow.
+- Updated review statistics after resolution.
+
+### 6.5 Readiness Tracking
+
+- Knowledge review progress.
+- Verified and unresolved claim counts.
+- Project readiness percentage.
+- Dashboard updates following review actions.
+
+---
+
+## 7. Demonstration Scenario
+
+The application includes a demonstration project named **Payments Service**.
+
+The demonstration scenario represents a senior backend developer, Arjun Sharma, leaving the project on 14 November 2026.
+
+The dashboard presents project knowledge and handover readiness information.
+
+The demonstration data includes:
+
+- 46 total knowledge claims.
+- 25 initially verified claims.
+- 7 conflicting claims.
+- 9 missing claims.
+- 5 uncertain claims.
+- Initial readiness score of 58%.
+
+A project manager can inspect a conflicting claim, examine its available evidence, enter an explanation and approve the claim.
+
+After resolving one conflict in the local demonstration, the dashboard updated to show:
+
+- 26 reviewed claims.
+- 26 verified claims.
+- 6 conflicting claims.
+- Readiness score increased to 60%.
+
+This demonstrates the human review and readiness tracking workflow.
+
+*Note: Demonstration figures describe the sample project and are not real organisational data.*
+
+---
+
+## 8. Technology Stack
+
+### Frontend
+
+- React 18
+- Vite
+- JavaScript
+- HTML5
+- CSS3
+
+### Backend
+
+- Python
+- FastAPI
+- Pydantic
+- SQLAlchemy
+
+### Database
+
+- SQLite as the default database.
+- PostgreSQL support through database configuration.
+
+### Authentication and Security
+
+- JWT-based authentication implementation.
+- Password hashing using PBKDF2.
+- Environment-based configuration for sensitive credentials.
+
+### Document Processing
+
+- PyMuPDF for PDF processing.
+- python-docx for Word document processing.
+
+### External Integration
+
+- GitHub REST API for repository information.
+- Optional LLM integration through an OpenAI-compatible API configuration.
+
+### Testing
+
+- Pytest.
+- 17 automated backend tests passed locally.
+
+### Deployment and Development Tools
+
+- Git and GitHub.
+- Docker.
+- Render.
+- Visual Studio Code.
+
+---
+
+## 9. System Architecture
+
+KnowFlow AI follows a full-stack application architecture.
+
+### Frontend Layer
+
+The React application provides the user interface for:
+
+- Accessing the handover workspace.
+- Viewing project information.
+- Inspecting knowledge claims.
+- Reviewing evidence.
+- Resolving conflicts.
+- Tracking readiness.
+
+### Backend Layer
+
+The FastAPI backend handles:
+
+- Application API requests.
+- Knowledge claim processing.
+- Verification logic.
+- Evidence handling.
+- Review operations.
+- Data persistence.
+
+### Verification Engine
+
+The verification engine processes knowledge claims and applies rule-based and text-matching checks to classify information.
+
+It supports the four claim statuses:
+
+- Verified
+- Uncertain
+- Conflicting
+- Missing
+
+### Data Layer
+
+SQLAlchemy manages database operations. SQLite is used by default, with PostgreSQL support through configuration.
+
+### External Services
+
+GitHub integration is designed to retrieve repository information. Optional LLM functionality can be enabled through environment configuration.
+
+### Deployment
+
+The application is packaged using Docker and deployed on Render.
+
+---
+
+## 10. Technical Implementation
+
+One of the main technical challenges was connecting project knowledge, evidence, verification and human review into one workflow.
+
+The backend contains a verification engine that evaluates claims using rule-based and text-matching techniques.
+
+The system organises the results into structured claim statuses so that project managers can understand which information is supported, uncertain, conflicting or missing.
+
+Evidence is presented alongside claims to support human verification rather than treating every automatically generated result as unquestionably correct.
+
+The review workflow allows a project manager to record an explanation and approve a claim.
+
+The dashboard then reflects the updated review progress and readiness information.
+
+This approach combines automated checks with human decision-making.
+
+---
+
+## 11. Testing and Validation
+
+The backend was tested locally using Pytest.
+
+**Automated test result:**
+
+17 tests passed successfully.
+
+The local application was also tested through the browser.
+
+The demonstrated workflow included:
+
+1. Opening the application.
+2. Accessing the project manager demonstration.
+3. Loading the project dashboard.
+4. Inspecting a conflicting knowledge claim.
+5. Reviewing supporting evidence.
+6. Recording an explanation.
+7. Approving the claim.
+8. Observing updated dashboard statistics.
+
+The deployed backend health endpoint was also checked.
+
+**Health endpoint:**
+
+https://knowflow-ai-btyv.onrender.com/api/health
+
+The backend returned:
+
+`{"ok":true,"llm":false,"github_token":false}`
+
+This confirms that the backend is running. The LLM and authenticated GitHub integrations are not enabled in the current deployment.
+
+---
+
+## 12. Deployment
+
+KnowFlow AI is deployed on Render using Docker.
+
+**Live URL:**
+
+https://knowflow-ai-btyv.onrender.com
+
+**Source Repository:**
+
+https://github.com/poojasrichezhian/KnowFlow-AI
+
+The project source code is maintained in a public GitHub repository.
+
+The deployment uses Render's free hosting plan. As a result, the service may take additional time to respond after a period of inactivity.
+
+---
+
+## 13. Changes from Round 1
+
+The original proposal focused on developing an intelligent knowledge handover platform to prevent the loss of critical project information.
+
+During implementation, we prioritised building a functional full-stack application.
+
+The major implementation changes include:
+
+- Developed a working React frontend and FastAPI backend.
+- Implemented a project handover dashboard.
+- Introduced four knowledge claim classifications.
+- Added evidence-based claim review.
+- Implemented human-assisted conflict resolution.
+- Added readiness and review progress tracking.
+- Added automated backend testing.
+- Containerised and deployed the application using Docker and Render.
+
+We prioritised a functional and demonstrable core product instead of claiming advanced features that were not yet ready.
+
+---
+
+## 14. Current Limitations
+
+The current version is a working prototype with the following limitations:
+
+1. Advanced LLM-based analysis is not enabled in the current deployment because an LLM API key has not been configured.
+2. Authenticated GitHub integration is not enabled because a GitHub token has not been configured.
+3. The current verification engine primarily uses rule-based and text-matching techniques.
+4. Advanced semantic understanding and context-aware verification need further improvement.
+5. Scanned PDF documents may not be fully supported.
+6. The current implementation has limitations in the types of conflicts it can identify.
+7. The deployment uses a free hosting plan, so initial loading after inactivity may be delayed.
+8. Database persistence and production scalability require further improvement before real organisational use.
+
+These limitations will guide our next development phase.
+
+---
+
+## 15. Three Major Improvements Planned for Round 3
+
+We commit to delivering the following three substantial improvements.
+
+### Improvement 1: Semantic Knowledge Verification
+
+We will enhance the verification engine using semantic embeddings and LLM-based entailment.
+
+The improved system will compare the meaning of claims with supporting evidence rather than relying mainly on keyword matching.
+
+Expected improvements:
+
+- Better understanding of technical context.
+- More accurate knowledge verification.
+- Improved contradiction detection.
+- More reliable identification of unsupported claims.
+- Better evidence-based confidence assessment.
+
+**User Impact:** Project managers will receive more meaningful and context-aware verification results.
+
+### Improvement 2: Continuous Knowledge Monitoring
+
+We will implement continuous GitHub repository monitoring through scheduled synchronisation or webhook integration.
+
+The system will detect relevant changes in project source code and documentation and identify knowledge claims that may have become outdated.
+
+Expected improvements:
+
+- Automated repository synchronisation.
+- Detection of changes affecting existing knowledge.
+- Identification of outdated claims.
+- Notifications for knowledge that needs review.
+- Improved handover information freshness.
+
+**User Impact:** Teams will be able to maintain accurate project knowledge as development continues.
+
+### Improvement 3: Ask the Handover – Evidence-Based Question Answering
+
+We will introduce an interactive question-answering capability that allows team members to ask questions about their projects.
+
+The system will generate answers using approved knowledge claims and their supporting evidence.
+
+If reliable information is unavailable, the system will identify the missing knowledge and suggest follow-up questions.
+
+Expected improvements:
+
+- Natural-language project questions.
+- Answers supported by approved evidence.
+- Source references for generated answers.
+- Identification of unanswered questions.
+- Suggestions for collecting missing knowledge.
+
+**User Impact:** New developers will be able to understand unfamiliar projects more quickly and find reliable information without manually searching multiple documents.
+
+---
+
+## 16. Future Vision
+
+Our long-term vision is to make KnowFlow AI a reliable knowledge continuity platform for software development teams.
+
+We aim to reduce knowledge loss, improve project transitions and help organisations preserve important technical decisions and responsibilities.
+
+By combining automated knowledge verification, continuous monitoring and evidence-based question answering, KnowFlow AI can make project handovers more transparent and efficient.
+
+---
+
+## 17. Conclusion
+
+KnowFlow AI transforms traditional project handover into a structured and evidence-driven process.
+
+The current build demonstrates a working foundation with a project dashboard, knowledge claim classification, evidence review, human conflict resolution and readiness tracking.
+
+We have developed and deployed the full-stack application, published the source code and tested the backend with 17 passing automated tests.
+
+Our Round 3 commitments focus on semantic verification, continuous knowledge monitoring and evidence-based question answering.
+
+**KnowFlow AI – Preserve Knowledge. Verify Understanding. Ensure Continuity.**
+
+---
+
+## 18. Project Links
+
+| Resource | Link |
+|---|---|
+| Live Application | https://knowflow-ai-btyv.onrender.com |
+| GitHub Repository | https://github.com/poojasrichezhian/KnowFlow-AI |
+| Backend Health Check | https://knowflow-ai-btyv.onrender.com/api/health |
+
+**Team Members**
+
+- Poojasri I S
+- Aadarshini S S
+- Surya Prakash M
