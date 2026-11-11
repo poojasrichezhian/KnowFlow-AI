@@ -1,57 +1,97 @@
 # KnowFlow AI
 
-Verified project handovers. KnowFlow reads a repository, notes, documents and a task list, checks every
-statement against the other sources, and gives each claim its evidence and one of four states:
-**Verified, Uncertain, Conflicting, Missing**. A project manager reviews and approves before anything is shared.
+**Verified project handovers.**
 
-Team: Poojasri I S, Aadarshini S S, Surya Prakash M
+KnowFlow reads a repository, notes, documents, and a task list. It checks statements against available sources and gives each claim its evidence and one of four states: **Verified, Uncertain, Conflicting, or Missing**.
 
-## What it does
+A project manager reviews and approves claims before anything is shared.
 
-- **Evidence ledger.** Every claim shows where it was stated, what supports it and what contradicts it, with file and line or commit.
-- **Deterministic verifier.** States are decided by rules over the evidence, never by a language model. Same sources, same result.
-- **Four conflict checks.** A named owner against commit history, "done" against an open task or TODO, opposite wording about the
-  same thing (asynchronous/synchronous, enabled/disabled), and documents that point at files which do not exist.
-- **Facts read from the repository.** Who commits to each module, single-owner modules, imports between modules,
-  TODO/FIXME/HACK notes, configuration the code reads but no document explains, modules without tests, open issues.
-- **Departure simulator.** Pick a person: see the modules only they know and get an exit interview with one question per gap.
-  Answers become evidence and move a Missing item to Uncertain, not straight to Verified.
-- **Human review.** Approve, reject, edit, or resolve a conflict with a written reason. Conflicts cannot be approved unresolved.
-- **Role-based handover.** Published versions with history. Managers, developers and new team members each see a different report.
-- **Permissions.** JWT sign-in, project membership, roles, and managers-only sources whose claims are hidden from other roles.
+**Team:** Poojasri I S, Aadarshini S S, Surya Prakash M
 
-## Run it locally
+## What It Does
 
-Needs Python 3.11+ and Node 18+.
+- **Evidence Ledger:** Every claim shows where it was stated, what supports it, and what contradicts it, with file, line, or commit references.
+- **Deterministic Verifier:** States are decided using rules over the evidence, not by a language model. The same sources produce the same results.
+- **Four Conflict Checks:** Identifies a named owner against commit history, "done" claims against open tasks or TODOs, opposite wording about the same thing (such as asynchronous/synchronous or enabled/disabled), and documents that reference files that do not exist.
+- **Facts Read from the Repository:** Identifies contributors to each module, single-owner modules, imports between modules, TODO/FIXME/HACK notes, undocumented configuration, modules without tests, and open issues.
+- **Departure Simulator:** Select a person to see the modules only they know and generate an exit interview with one question per knowledge gap. Answers become evidence and move a Missing item to Uncertain, not directly to Verified.
+- **Human Review:** Reviewers can approve, reject, edit, or resolve a conflict with a written reason. Conflicts cannot be approved while unresolved.
+- **Role-Based Handover:** Supports published versions with history. Managers, developers, and new team members can receive different reports.
+- **Permissions:** Supports JWT sign-in, project membership, roles, and managers-only sources.
+
+## Run It Locally
+
+### Requirements
+
+- Python 3.11+
+- Node.js 18+
+
+### Installation and Startup
+
+From the project root:
 
 ```bash
-cd frontend && npm install && npm run build && cd ..
-cd backend && pip install -r requirements.txt
-uvicorn app.main:app --port 8000
+cd frontend
+npm install
+npm run build
+cd ..
+
+cd backend
+pip install -r requirements.txt
+python -m uvicorn app.main:app --reload --port 8000
 ```
 
-Open http://localhost:8000 and choose a demo role. The demo project is created on first start.
+Open [http://localhost:8000](http://localhost:8000) and choose a demo role.
 
-Tests: `cd backend && pip install pytest && python -m pytest -q`
+The demo project is created on first start.
 
-For frontend development run `npm run dev` in `frontend/` (it proxies `/api` to port 8000).
+### Run Tests
 
-## Deploy (one Docker service)
+From the project root:
 
-The `Dockerfile` builds the frontend and serves it from the API, so there is a single URL.
+```bash
+cd backend
+pip install pytest
+python -m pytest -q
+```
 
-1. Push this folder to a **public** GitHub repository.
-2. On Render: New > Web Service > pick the repository > it detects the Dockerfile > Free plan.
-   (Hugging Face Spaces with the Docker SDK also works: add `ENV PORT=7860` or set the Space's `app_port`.)
-3. Set the environment variables from `.env.example`. `SECRET_KEY` and `GITHUB_TOKEN` matter most.
-4. Open the URL in a private window and sign in with a demo role.
+### Frontend Development
 
-Free plans sleep when idle, so the first request can take up to a minute. Without `DATABASE_URL` the SQLite
-file lives inside the container and is recreated on every restart (the demo project comes back, other accounts do not).
+For frontend development, run the following commands in a separate terminal:
 
-### Make the demo evidence links clickable
+```bash
+cd frontend
+npm run dev
+```
 
-The demo project uses a small sample repository with a fictional team. To let anyone open its commits and files on GitHub:
+The frontend development server proxies `/api` requests to the backend on port 8000.
+
+## Deployment
+
+### Deploy Using One Docker Service
+
+The `Dockerfile` builds the frontend and serves it from the API, allowing the application to run using a single URL.
+
+1. Push this folder to a **public GitHub repository**.
+2. On Render, select **New → Web Service**.
+3. Connect the GitHub repository. Render should detect the Dockerfile.
+4. Select the Free plan.
+5. Configure the required environment variables using `.env.example`.
+6. Open the deployed URL in a private browser window and test the application.
+
+`SECRET_KEY` is required for secure authentication. `GITHUB_TOKEN` is useful for authenticated GitHub API access and higher API rate limits.
+
+The application can also be deployed using Hugging Face Spaces with the Docker SDK.
+
+### Deployment Notes
+
+- Free hosting plans may sleep when idle, so the first request can take up to a minute.
+- Without `DATABASE_URL`, SQLite data is stored inside the container and may be lost when the container restarts.
+- The demo project is recreated on startup.
+
+### Make Demo Evidence Links Clickable
+
+The demo project uses a sample repository with a fictional team. To allow users to open its commits and files on GitHub:
 
 ```bash
 python scripts/make_demo_repo.py payments-service-demo
@@ -60,34 +100,21 @@ git remote add origin https://github.com/YOUR_USER/payments-service-demo.git
 git push -u origin main
 ```
 
-Then set `DEMO_REPO=YOUR_USER/payments-service-demo` and restart. Commit hashes are fixed by the script, so the
-bundled snapshot matches the pushed repository exactly.
+Replace `YOUR_USER` with your GitHub username.
 
-## How a state is decided
+Then configure:
+
+```env
+DEMO_REPO=YOUR_USER/payments-service-demo
+```
+
+Restart the application after setting the variable.
+
+## How a State Is Decided
 
 | State | Rule |
-| --- | --- |
-| Verified | Counted or read directly from the repository, or stated in one source and backed by an independent one |
-| Uncertain | Stated in one place only, or supported only by indirect evidence such as age |
-| Conflicting | Two sources disagree. Only a reviewer can resolve it, with a written reason |
-| Missing | Something a successor needs (config, tests, an owner, the reason for a decision) that no source explains |
-
-Readiness is the share of claims that are verified and approved; unreviewed or single-source claims count in part,
-open conflicts and gaps count for nothing.
-
-## Layout
-
-```
-backend/app/engine.py         the verifier (pure function: sources in, claims out)
-backend/app/github_ingest.py  GitHub REST API reader
-backend/app/retrieval.py      TF-IDF evidence search
-backend/app/main.py           FastAPI routes, review, versions, reports
-backend/app/llm.py            optional LLM step with quote lock
-backend/seed/                 bundled demo project
-frontend/src/                 React interface
-scripts/                      sample repository builder
-```
-
-## Known limits
-
-See `ROUND2_SUBMISSION.md`.
+|---|---|
+| **Verified** | Counted or read directly from the repository, or stated in one source and supported by an independent source. |
+| **Uncertain** | Stated in one place only, or supported only by indirect evidence such as age. |
+| **Conflicting** | Two sources disagree. Only a reviewer can resolve the conflict with a written reason. |
+| **Missing** | Something a successor needs, such as configuration, tests,
